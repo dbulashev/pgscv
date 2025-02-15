@@ -3,6 +3,7 @@ package collector
 
 import (
 	"context"
+	"github.com/cherts/pgscv/internal/sql"
 	"regexp"
 	"strconv"
 	"strings"
@@ -14,43 +15,6 @@ import (
 )
 
 const (
-	// postgresActivityQuery95 defines activity query for 9.5 and older.
-	// Postgres 9.5 doesn't have 'wait_event_type', 'wait_event' and 'backend_type'  attributes.
-	postgresActivityQuery95 = "SELECT " +
-		"coalesce(usename, 'system') AS user, datname AS database, state, waiting, " +
-		"coalesce(extract(epoch FROM clock_timestamp() - xact_start), 0) AS active_seconds, " +
-		"CASE WHEN waiting = 't' THEN extract(epoch FROM clock_timestamp() - state_change) ELSE 0 END AS waiting_seconds, " +
-		"left(query, 32) AS query " +
-		"FROM pg_stat_activity"
-
-	// postgresActivityQuery96 defines activity query for 9.6.
-	// Postgres 9.6 doesn't have 'backend_type' attribute.
-	postgresActivityQuery96 = "SELECT " +
-		"coalesce(usename, 'system') AS user, datname AS database, state, wait_event_type, wait_event, " +
-		"coalesce(extract(epoch FROM clock_timestamp() - xact_start), 0) AS active_seconds, " +
-		"CASE WHEN wait_event_type = 'Lock' THEN extract(epoch FROM clock_timestamp() - state_change) ELSE 0 END AS waiting_seconds, " +
-		"left(query, 32) AS query " +
-		"FROM pg_stat_activity"
-
-	// postgresActivityQuery13 defines activity query for versions from 10 to 13.
-	postgresActivityQuery13 = "SELECT " +
-		"coalesce(usename, backend_type) AS user, datname AS database, state, wait_event_type, wait_event, " +
-		"coalesce(extract(epoch FROM clock_timestamp() - xact_start), 0) AS active_seconds, " +
-		"CASE WHEN wait_event_type = 'Lock' THEN extract(epoch FROM clock_timestamp() - state_change) ELSE 0 END AS waiting_seconds, " +
-		"left(query, 32) AS query " +
-		"FROM pg_stat_activity"
-
-	// postgresActivityQueryLatest defines activity query for recent versions.
-	// Postgres 14 has pg_locks.waitstart which is better for taking sessions waiting time.
-	postgresActivityQueryLatest = "SELECT " +
-		"coalesce(usename, backend_type) AS user, datname AS database, state, wait_event_type, wait_event, " +
-		"coalesce(extract(epoch FROM clock_timestamp() - xact_start), 0) AS active_seconds, " +
-		"CASE WHEN wait_event_type = 'Lock' " +
-		"THEN (SELECT extract(epoch FROM clock_timestamp() - max(waitstart)) FROM pg_locks l WHERE l.pid = a.pid) " +
-		"ELSE 0 END AS waiting_seconds, " +
-		"left(query, 32) AS query " +
-		"FROM pg_stat_activity a"
-
 	postgresPreparedXactQuery = "SELECT count(*) AS total FROM pg_prepared_xacts"
 
 	postgresStartTimeQuery = "SELECT extract(epoch FROM pg_postmaster_start_time())"
@@ -155,8 +119,12 @@ func (c *postgresActivityCollector) Update(config Config, ch chan<- prometheus.M
 	}
 	defer conn.Close()
 
+	query, err := sql.GetQuery(config, "activity.sql")
+	if err != nil {
+		return err
+	}
 	// get pg_stat_activity stats
-	res, err := conn.Query(selectActivityQuery(config.serverVersionNum))
+	res, err := conn.Query(query)
 	if err != nil {
 		return err
 	}
