@@ -3,6 +3,7 @@ package collector
 
 import (
 	"os"
+	"path/filepath"
 	"strings"
 
 	"github.com/cherts/pgscv/internal/log"
@@ -26,9 +27,14 @@ func parseMounts(r []disk.PartitionStat) ([]mount, error) {
 
 	// Parse line by line, split line to param and value, parse the value to float and save to store.
 	for _, diskData := range r {
+		p, err := filepath.EvalSymlinks(diskData.Mountpoint)
+		if err != nil {
+			log.Errorf("failed to evaluate symlink %s: %s", diskData.Mountpoint, err)
+		}
+
 		s := mount{
 			device:     diskData.Device,
-			mountpoint: diskData.Mountpoint,
+			mountpoint: p,
 			fstype:     diskData.Fstype,
 			options:    diskData.Opts,
 		}
