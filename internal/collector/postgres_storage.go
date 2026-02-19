@@ -660,7 +660,11 @@ func findMountpoint(mounts []mount, path string) (string, string, error) {
 
 	// Check path in a list of all mounts.
 	for _, m := range mounts {
-		if strings.HasPrefix(path, m.mountpoint) {
+		mp := m.mountpoint
+		if mp == "/__w" { // github actions
+			mp = "/"
+		}
+		if mp == path {
 			return path, m.device, nil
 		}
 	}
