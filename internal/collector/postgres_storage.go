@@ -688,6 +688,8 @@ func getMountpoints() ([]mount, error) {
 	log.Debug("get disk partitions")
 
 	diskStat, err := disk.Partitions(false)
+	fmt.Println(diskStat)
+
 	if err != nil {
 		return nil, err
 	}
