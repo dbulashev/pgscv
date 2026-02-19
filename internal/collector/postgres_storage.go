@@ -635,6 +635,7 @@ func getDirectorySize(path string) (int64, error) {
 
 // findMountpoint checks path in the list of passed mountpoints.
 func findMountpoint(mounts []mount, path string) (string, string, error) {
+	fmt.Println(mounts, path)
 	fi, err := os.Lstat(path)
 	if err != nil {
 		return "", "", err
