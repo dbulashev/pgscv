@@ -155,8 +155,11 @@ func readMountpointStat(mountpoint string) (filesystemStat, error) {
 	// is discarded and goroutine finishes normally.
 
 	timeout := 3 * time.Second // three seconds is sufficient to consider filesystem unresponsive.
-	statCh := make(chan *syscall.Statfs_t)
-	errCh := make(chan error)
+	// Channels are buffered (cap 1) so the child goroutine can always deliver its single result
+	// without blocking, even if the parent has already returned (e.g. after its own timeout below).
+	// Otherwise the goroutine would hang forever on send and leak on every failing mount.
+	statCh := make(chan *syscall.Statfs_t, 1)
+	errCh := make(chan error, 1)
 
 	// Run goroutine with reading stats. Check kind of returned error. If error related to timeout,
 	// print warning and return. Other kinds of error should be reported to parent.
@@ -168,6 +171,7 @@ func readMountpointStat(mountpoint string) (filesystemStat, error) {
 				return
 			}
 			errCh <- err
+			return
 		}
 
 		// Syscall successful - send stat to the channel.
